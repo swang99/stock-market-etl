@@ -1,2 +1,9 @@
 yfinance
+airflow
+plotly
 pyarrow
+boto3
+pandas
+polars
+python-dotenv
+sqlalchemy
