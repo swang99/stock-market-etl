@@ -8,3 +8,4 @@ python-dotenv==1.1.1
 SQLAlchemy==1.4.54
 streamlit==1.48.0
 lxml
+psycopg2
