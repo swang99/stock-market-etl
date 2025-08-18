@@ -258,7 +258,7 @@ with compare_tab:
 			fig = go.Figure()
 
 			for i in range(len(relative_to_df) - 1):
-				color = "red" if relative_to_df.loc[i, "pct_diff"] < 0 else "green"
+				color = "#ff4b4b" if relative_to_df.loc[i, "pct_diff"] < 0 else "#1ed760"
 				rel_chart_date = relative_to_df['date'].iloc[i]
 				curr_rel_return = relative_to_df['pct_diff'].iloc[i]
 				fin_rel_return = relative_to_df['pct_diff'].iloc[0]
@@ -280,8 +280,8 @@ with compare_tab:
 
 				fig.update_layout(
 					title=dict(
-						text=f"⚔️ {ticker} outperforms {comp_ticker} by {fin_rel_return:.2f}%",
-						font=dict(color="red" if fin_rel_return < 0 else "green")
+						text=f"⚔️ {ticker} outperforms {comp_ticker} by {fin_rel_return:.2f} percentage points",
+						font=dict(color="#ff4b4b" if fin_rel_return < 0 else "#1ed760")
 					),
 					xaxis_title=None,
 					yaxis_title="Return (pp)",
