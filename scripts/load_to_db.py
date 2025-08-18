@@ -87,8 +87,22 @@ def load_to_sp500_companies(companies_table, engine):
 		logging.warning("No company data to load into Postgres.")
 		return
 	
-	df.write_database(companies_table, engine, if_table_exists='append')
-	logging.info(f"Loaded {len(df)} rows into {companies_table}.")
+	# get tickers that already exist in DB
+	with engine.connect() as conn:
+		existing_tickers = pl.DataFrame(conn.execute(
+			f"SELECT ticker_symbol FROM {companies_table}"
+		).fetchall())
+
+	# drop duplicates that already exist
+	if existing_tickers.height > 0:
+		df = df.join(existing_tickers, on="ticker_symbol", how="anti")
+
+	if df.is_empty():
+		logging.info("All tickers already exist, nothing new to load.")
+		return
+
+	df.write_database(companies_table, engine, if_table_exists="append")
+	logging.info(f"Loaded {len(df)} new rows into {companies_table}.")
 
 def main():
 	postgres_url=f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
