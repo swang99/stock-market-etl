@@ -14,7 +14,7 @@ from config import TICKERS, STOCK_TABLE
 
 load_dotenv()
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)
 def get_engine():
     DB_USER = os.getenv("POSTGRES_USER")
     DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
