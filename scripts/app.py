@@ -316,8 +316,9 @@ with overview_tab:
 	else:
 		sector_df = sp500_info
 
-	top_gainers = sector_df.sort_values(by="Return Today", ascending=False).head(20)
-	top_losers = sector_df.sort_values(by="Return Today", ascending=True).head(20)
+	top_n = min(len(sector_df) // 2, 20)
+	top_gainers = sector_df.sort_values(by="Return Today", ascending=False).head(top_n)
+	top_losers = sector_df.sort_values(by="Return Today", ascending=True).head(top_n)
 	top_gainers["Return Today"] = top_gainers["Return Today"].apply(format_daily_return)
 	top_losers["Return Today"] = top_losers["Return Today"].apply(format_daily_return)
 
