@@ -71,7 +71,7 @@ def load_to_stock_metrics(table_name: str, year: str, ticker: str, engine):
 	df = df.select([col for col in df.columns if col not in ["latest_date", "adj close"]])
 	if df.is_empty(): 
 		return
-	df.write_database(table_name, engine, if_table_exists='append')
+	df.write_database(table_name, engine, if_table_exists='replace')
 	logging.info(f"Loaded {len(df)} new rows into {table_name}.")
 
 def load_to_sp500_companies(companies_table, engine):
@@ -101,7 +101,7 @@ def load_to_sp500_companies(companies_table, engine):
 		logging.info("All tickers already exist, nothing new to load.")
 		return
 
-	df.write_database(companies_table, engine, if_table_exists="append")
+	df.write_database(companies_table, engine, if_table_exists="replace")
 	logging.info(f"Loaded {len(df)} new rows into {companies_table}.")
 
 def main():
