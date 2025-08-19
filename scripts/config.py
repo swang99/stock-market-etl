@@ -10,7 +10,7 @@ def get_sp500_tickers():
 
 TICKERS = get_sp500_tickers()
 BACKFILL_START_DATE = "2005-01-01"
-ANALYSIS_START_DATE = "2020-01-01"
+AN_START_DATE = "2020-01-01"
 END_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 ROLLING_WINDOW = 30  # days for volatility
 

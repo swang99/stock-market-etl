@@ -9,3 +9,4 @@ SQLAlchemy==1.4.54
 streamlit==1.48.0
 lxml
 psycopg2-binary
+numpy
