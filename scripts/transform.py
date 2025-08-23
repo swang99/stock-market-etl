@@ -54,6 +54,7 @@ def load_raw_df(year: str, ticker: str) -> pl.DataFrame:
 	
 	buffer = io.BytesIO(s3_obj['Body'].read())
 	df = pl.read_parquet(buffer)
+	df = df.with_columns(pl.col("volume").cast(pl.Int64))
 	return df
 
 def compute_metrics(df: pl.DataFrame) -> pl.DataFrame:
@@ -76,12 +77,13 @@ def compute_metrics(df: pl.DataFrame) -> pl.DataFrame:
 	return q.collect()
 
 def data_quality_checks(df: pl.DataFrame) -> bool:
+	# print("data quality check: ", df.dtypes)
 	expected_schema = {
 		"date": pl.Datetime, "close": pl.Float64, "high": pl.Float64,
-		"low": pl.Float64, "open": pl.Float64,
+		"low": pl.Float64, "open": pl.Float64, "volume": pl.Int64,
 		"ticker": pl.Utf8, "ingest_ts": pl.Datetime, "daily_return": pl.Float64,
 		"rolling_vol_30d": pl.Float64,
-	} # "volume": pl.Float64,
+	}
 
 	# Check columns present
 	missing_cols = [col for col in expected_schema if col not in df.columns]
@@ -123,15 +125,15 @@ def save_enriched_data(df: pl.DataFrame, year: str, ticker: str):
 	s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=buffer.getvalue())
 		
 def process_ticker(year: int, ticker: str):
-    raw_df = load_raw_df(year, ticker)
-    if raw_df.is_empty():
-        return
+	raw_df = load_raw_df(year, ticker)
+	if raw_df.is_empty():
+		return
 
-    enriched_df = compute_metrics(raw_df)
-    if data_quality_checks(enriched_df):
-        save_enriched_data(enriched_df, year, ticker)
-    else:
-        logging.warning(f"Data quality failed for {year}/{ticker}")
+	enriched_df = compute_metrics(raw_df)
+	if data_quality_checks(enriched_df):
+		save_enriched_data(enriched_df, year, ticker)
+	else:
+		logging.warning(f"Data quality failed for {year}/{ticker}")
 
 def main():
 	years = get_years("stock-market-etl", "raw/")

@@ -5,12 +5,14 @@ Fetches only new data since the last available date in Parquet storage.
 """
 
 import io
+import os
 import boto3
+from dotenv import load_dotenv
 import sys
 import logging
 import yfinance as yf
 import polars as pl
-import pandas as pd
+from sqlalchemy import create_engine
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,6 +21,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # CONFIG
 # -----------------
 from config import TICKERS
+
+load_dotenv()
+DB_USER = os.getenv("POSTGRES_USER")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+DB_HOST = os.getenv("POSTGRES_HOST")
+DB_PORT = os.getenv("POSTGRES_PORT")
+DB_NAME = os.getenv("POSTGRES_DB")
+
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
@@ -34,8 +44,7 @@ logging.basicConfig(
 # -----------------
 # FUNCTIONS
 # -----------------
-def get_latest_ingest_date() -> Optional[datetime]:
-	"""Find the most recent date available for this ticker in Parquet files."""
+"""def get_latest_ingest_date() -> Optional[datetime]:
 	bucket_name = "stock-market-etl"
 	prefix = "raw/"
 	response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
@@ -53,7 +62,14 @@ def get_latest_ingest_date() -> Optional[datetime]:
 			latest_date = latest_cand
 
 	latest_date = pd.to_datetime(latest_date).to_pydatetime()
-	return latest_date
+	return latest_date"""
+
+def get_latest_ingest_date(engine) -> Optional[datetime]:
+	"""Get the most recent date available for this ticker in Postgres."""
+	query = "SELECT MAX(date) FROM stock_metrics"
+	with engine.connect() as conn:
+		res = conn.execute(query).fetchone()[0]
+		return res
 
 def fetch_incremental_data(tickers: list[str], start: datetime, end: datetime) -> pl.DataFrame:
 	logging.info(f"Fetching {tickers} data from {start.date()} to {end.date()} ")
@@ -71,25 +87,26 @@ def fetch_incremental_data(tickers: list[str], start: datetime, end: datetime) -
 	df = df.with_columns(
 		ingest_ts=pl.lit(datetime.now(timezone.utc))
 	)
+
 	return df
 
 def download_from_s3(bucket_name: str, key: str) -> tuple[str, pl.DataFrame]:
-    """Download a Parquet file from S3 and return DataFrame."""
-    try:
-        obj = s3_client.get_object(Bucket=bucket_name, Key=key)
-        buffer = io.BytesIO(obj["Body"].read())
-        df = pl.read_parquet(buffer)
-        return key, df
-    except s3_client.exceptions.NoSuchKey:
-        return key, pl.DataFrame()
+	"""Download a Parquet file from S3 and return DataFrame."""
+	try:
+		obj = s3_client.get_object(Bucket=bucket_name, Key=key)
+		buffer = io.BytesIO(obj["Body"].read())
+		df = pl.read_parquet(buffer)
+		return key, df
+	except s3_client.exceptions.NoSuchKey:
+		return key, pl.DataFrame()
 
 def upload_to_s3(bucket_name: str, key: str, df: pl.DataFrame):
-    """Upload a DataFrame as Parquet to S3."""
-    buffer = io.BytesIO()
-    df.write_parquet(buffer)
-    buffer.seek(0)
-    s3_client.put_object(Bucket=bucket_name, Key=key, Body=buffer.getvalue())
-    return key
+	"""Upload a DataFrame as Parquet to S3."""
+	buffer = io.BytesIO()
+	df.write_parquet(buffer)
+	buffer.seek(0)
+	s3_client.put_object(Bucket=bucket_name, Key=key, Body=buffer.getvalue())
+	return key
 
 def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 	"""
@@ -103,14 +120,14 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 	bucket_name = "stock-market-etl"
 	years = list(df.select(pl.col("date").dt.year()).unique().to_series())
 
-	# 1️⃣ Build list of all keys to read
+	# build list of all keys to read
 	keys_to_read = [
 		f"raw/{year}/{ticker}_metrics.parquet"
 		for year in years
 		for ticker in tickers
 	]
 
-	# 2️⃣ Parallel read from S3
+	# parallel read from S3
 	existing_data = {}
 	with ThreadPoolExecutor(max_workers=10) as executor:
 		futures = {executor.submit(download_from_s3, bucket_name, key): key for key in keys_to_read}
@@ -118,7 +135,7 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 			key, existing_df = future.result()
 			existing_data[key] = existing_df
 
-	# 3️⃣ Merge with new data
+	# merge with new data
 	merged_data = {}
 	for year in years:
 		for ticker in tickers:
@@ -126,12 +143,16 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 			subset_df = df.filter(
 				(pl.col("date").dt.year() == year) & (pl.col("ticker") == ticker)
 			)
+
+			if ticker == 'MMM': 
+				print("existing df: ", existing_data[key].dtypes)
+				print("subset df to merge: ", subset_df.dtypes)
 			combined_df = pl.concat([existing_data[key], subset_df], how="vertical").unique(
 				subset=["date", "ticker"]
 			)
 			merged_data[key] = combined_df
 
-	# 4️⃣ Parallel write back to S3
+	# parallel write back to S3
 	with ThreadPoolExecutor(max_workers=10) as executor:
 		futures = {executor.submit(upload_to_s3, bucket_name, key, df): key for key, df in merged_data.items()}
 		for future in as_completed(futures):
@@ -140,8 +161,11 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 	logging.info("All partitions uploaded successfully.")
 	
 def main():
+	postgres_url=f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+	engine = create_engine(postgres_url)
+
 	today = datetime.today()
-	last_date = get_latest_ingest_date()
+	last_date = get_latest_ingest_date(engine)
 	if not last_date:
 		logging.warning(f"No historical data found for {TICKERS}. Run ingest_backfill.py first.")
 		return
@@ -160,5 +184,4 @@ def main():
 
 if __name__ == "__main__":
 	main()
-	
 

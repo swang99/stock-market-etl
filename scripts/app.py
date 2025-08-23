@@ -227,41 +227,53 @@ with compare_tab:
 		st.warning("No base ticker(s) selected")
 
 	for ticker in tickers_input:
-		if ticker != comp_ticker:
-			rel_df = compute_relative_returns(trends_df, ticker, comp_ticker)
-			fig = go.Figure()
+		if ticker == comp_ticker: continue
 
-			for i in range(len(rel_df) - 1):
-				color = "#ff4b4b" if rel_df.loc[i, "pct_diff"] < 0 else "#1ed760"
-				rel_chart_date = rel_df['date'].iloc[i]
-				curr_rel_return = rel_df['pct_diff'].iloc[i]
-				fin_rel_return = rel_df['pct_diff'].iloc[-1]
+		rel_df = compute_relative_returns(trends_df, ticker, comp_ticker)
+		fig = go.Figure()
 
-				fig.add_trace(
-					go.Scatter(
-						x=rel_df["date"].iloc[i:i+2],
-						y=rel_df["pct_diff"].iloc[i:i+2],
-						mode="lines",
-						line=dict(color=color, width=2),
-						showlegend=False,
-						hoverinfo="text",
-						text=[
-							f"<b>{ticker}</b><br>Date: {rel_chart_date:%Y-%m-%d}"
-							f"<br>Return: {curr_rel_return:.2f}%"
-						] * 2
-					)
-				)
+		fin_rel_return = rel_df['pct_diff'].iloc[-1]
+		fin_color = "#ff4b4b" if fin_rel_return < 0 else "#1ed760"
 
-				fig.update_layout(
-					title=dict(
-						text=f"⚔️ {ticker} outperforms {comp_ticker} by {fin_rel_return:.2f} percentage points",
-						font=dict(color="#ff4b4b" if fin_rel_return < 0 else "#1ed760")
-					),
-					xaxis_title=None,
-					yaxis_title="Return (pp)",
-					height=330
-				)
+		hover_text = [
+			f"<b>{ticker}</b><br>Date: {d:%Y-%m-%d}<br>Return: {r:.2f}%"
+			for d, r in zip(rel_df['date'], rel_df['pct_diff'])
+		]
+		
+		fig.add_trace(
+			go.Scatter(
+				x=rel_df["date"],
+				y=rel_df["pct_diff"],
+				mode="lines",
+				line=dict(color=fin_color, width=2),
+				showlegend=False,
+				hoverinfo="text",
+				text=hover_text
+			)
+		)
 
-			st.plotly_chart(fig, key=f"{ticker}_vs_{comp_ticker}")
+		# relative return text prompt
+		fig.update_layout(
+			title=dict(
+				text=f"⚔️ {ticker} outperforms {comp_ticker} by {fin_rel_return:.2f} percentage points",
+				font=dict(color=fin_color)
+			),
+			xaxis_title=None,
+			yaxis_title="Return (pp)",
+			height=330
+		)
+
+		# highlight 0% gridline
+		fig.update_layout(
+			shapes=[dict(
+				type="line",
+				x0=rel_df['date'].min(), x1=rel_df['date'].max(),
+				y0=0, y1=0,
+				line=dict(width=1.5),
+				layer="below" 
+			)]
+		)
+
+		st.plotly_chart(fig, key=f"{ticker}_vs_{comp_ticker}")
 
 	
