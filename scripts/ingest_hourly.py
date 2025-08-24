@@ -144,9 +144,6 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 				(pl.col("date").dt.year() == year) & (pl.col("ticker") == ticker)
 			)
 
-			if ticker == 'MMM': 
-				print("existing df: ", existing_data[key].dtypes)
-				print("subset df to merge: ", subset_df.dtypes)
 			combined_df = pl.concat([existing_data[key], subset_df], how="vertical").unique(
 				subset=["date", "ticker"]
 			)

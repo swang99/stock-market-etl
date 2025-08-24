@@ -45,7 +45,6 @@ def fetch_historical_data(tickers: list[str], start: str, end: str) -> pl.DataFr
 	# convert to polars df
 	df = pl.from_pandas(df_pd)
 	df = df.with_columns(ingest_ts=pl.lit(datetime.now(timezone.utc)))
-	print(df.dtypes)
 	return df
 
 def upload_partition(bucket_name: str, year: int, ticker: str, df: pl.DataFrame):
