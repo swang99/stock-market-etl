@@ -1,4 +1,5 @@
 import io
+import os
 import boto3
 import sys
 import logging
@@ -39,6 +40,13 @@ def save_sp_500():
 	buffer = io.BytesIO()
 	sp500_df.write_parquet(buffer)
 	buffer.seek(0)
+
+	# save locally for Streamlit cloud
+	local_dir = "data"
+	os.makedirs(local_dir, exist_ok=True)
+	local_csv_path = os.path.join(local_dir, "sp500_companies.csv")
+	sp500_df.write_csv(local_csv_path)
+	logging.info(f"Saved local S&P 500 data → {local_csv_path}")
 	
 	# save to S3
 	bucket_name = "stock-market-etl"
@@ -53,4 +61,3 @@ def main():
 
 if __name__ == "__main__":
 	main()
-	

@@ -10,7 +10,7 @@ import os
 # -----------------
 # CONFIG
 # -----------------
-from config import TICKERS, STOCK_TABLE
+from config import STOCK_TABLE
 
 load_dotenv()
 
@@ -106,6 +106,7 @@ def format_ticker(option: str) -> str:
 # -----------------
 st.title("S&P 500 Analyzer")
 overview_tab, compare_tab, = st.tabs(["Overview", "Compare"])
+TICKERS = sorted(ticker_map.keys())
 
 with overview_tab:
 	#st.caption(f"Last updated: {last_updated:%Y-%m-%d %I:%M %p}")
