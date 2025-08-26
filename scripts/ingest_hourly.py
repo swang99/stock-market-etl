@@ -45,7 +45,7 @@ logging.basicConfig(
 # FUNCTIONS
 # -----------------
 
-def get_latest_ingest_date(engine) -> Optional[datetime]:
+def get_latest_ingest_timestamp(engine) -> Optional[datetime]:
 	"""Get the most recent date available for this ticker in Postgres."""
 	query = "SELECT MAX(date) FROM stock_metrics"
 	with engine.connect() as conn:
@@ -121,13 +121,14 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 	for year in years:
 		for ticker in tickers:
 			key = f"raw/{year}/{ticker}_metrics.parquet"
+			
 			subset_df = df.filter(
 				(pl.col("date").dt.year() == year) & (pl.col("ticker") == ticker)
 			)
 
-			combined_df = pl.concat([existing_data[key], subset_df], how="vertical").unique(
-				subset=["date", "ticker"]
-			)
+			today = subset_df.select(pl.col("date")).unique().to_series()[0]
+			existing_df = existing_data[key].filter(pl.col("date") != today)
+			combined_df = pl.concat([existing_df, subset_df], how="vertical")
 			merged_data[key] = combined_df
 
 	# parallel write back to S3
@@ -139,23 +140,11 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 	logging.info("All partitions uploaded successfully.")
 	
 def main():
-	postgres_url=f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-	engine = create_engine(postgres_url)
-
-	today = datetime.today()
-	last_date = get_latest_ingest_date(engine)
-	if not last_date:
-		logging.warning(f"No historical data found for {TICKERS}. Run ingest_backfill.py first.")
-		return
-
-	start_date = last_date + timedelta(days=1)
-
-	# skip daily ingestion if already up-to-date
-	if start_date.date() > today.date():
-		logging.info(f"{TICKERS} is already up to date.")
-		return
-	
-	df_new = fetch_incremental_data(TICKERS, start_date, today + timedelta(days=1))
+	now = datetime.now()
+	start_ts = now.replace(hour=0, minute=0, second=0, microsecond=0)
+	end_ts = now
+	df_new = fetch_incremental_data(TICKERS, start_ts, end_ts)
+	# print(df_new.head())
 	save_partitioned_parquet(df_new, TICKERS)
 
 	logging.info("Daily incremental ingestion complete.")

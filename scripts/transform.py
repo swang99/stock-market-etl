@@ -74,6 +74,7 @@ def load_raw_df(year: str, ticker: str) -> pl.DataFrame:
 	buffer = io.BytesIO(s3_obj['Body'].read())
 	df = pl.read_parquet(buffer)
 	df = df.with_columns(pl.col("volume").cast(pl.Int64))
+
 	return df
 
 def compute_metrics(df: pl.DataFrame) -> pl.DataFrame:

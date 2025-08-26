@@ -1,2 +1,2 @@
 stock_etl/
-reset_airflow.sh
+etl.sh
