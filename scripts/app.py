@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
+import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from datetime import datetime, timedelta
@@ -45,8 +46,10 @@ def load_historical_data(tickers, start_date, end_date):
 
 def compute_trends(df, init_investment):
 	df = df.copy()
-	df["cumulative_return"] = df.groupby("ticker")["daily_return"].cumsum()
-	df["abs_return"] = init_investment * (1 + df["cumulative_return"] / 100)
+	df["daily_return"] = df["daily_return"].fillna(0)
+	df["daily_return"] = 1 + (df["daily_return"] / 100)
+	df["cumulative_return"] = df.groupby("ticker")["daily_return"].cumprod()
+	df["abs_return"] = init_investment * df["cumulative_return"]
 	return df
 
 def compute_final_returns(df):
@@ -61,7 +64,7 @@ def compute_relative_returns(df, base_ticker, comp_ticker):
 	base = df[df['ticker'] == base_ticker][['date', 'cumulative_return']]
 	comp = df[df['ticker'] == comp_ticker][['date', 'cumulative_return']]
 	merged = base.merge(comp, on='date', suffixes=('_base', '_comp'))
-	merged['pct_diff'] = merged['cumulative_return_base'] - merged['cumulative_return_comp']
+	merged['pct_diff'] = 100 * (merged['cumulative_return_base'] - merged['cumulative_return_comp'])
 	return merged
 
 @st.cache_data
@@ -85,7 +88,6 @@ def get_sp500_info():
 	"""
 	with engine.connect() as conn:
 		sp500_df = pd.read_sql_query(query, conn)
-	sp500_df["daily_return"] = sp500_df["daily_return"].round(2)
 	sp500_df.columns = ["Ticker", "Name", "Sector", "Return Today"]
 	return sp500_df
 
@@ -112,8 +114,8 @@ with overview_tab:
 	#st.caption(f"Last updated: {last_updated:%Y-%m-%d %I:%M %p}")
 	
 	def format_daily_return(val):
-		if val > 0: return f"⬆ {val:.2f}%"
-		elif val < 0: return f"⬇ {abs(val):.2f}%"
+		if val > 0: return f"⬆ {100 * val:.2f}%"
+		elif val < 0: return f"⬇ {100 * abs(val):.2f}%"
 		return f"— {val:.2f}%"
 		
 	def color_daily_return(val):
@@ -184,7 +186,10 @@ with compare_tab:
 		st.stop()
 
 	# 1. return graph
-	hist_df = load_historical_data(tickers_input + [comp_ticker], dates[0], dates[1])
+	base_comp = tickers_input
+	base_comp.append(comp_ticker)
+	
+	hist_df = load_historical_data(base_comp, dates[0], dates[1])
 	trends_df = compute_trends(hist_df, investment_input)
 	fin_returns_df = compute_final_returns(trends_df)
 
@@ -192,10 +197,10 @@ with compare_tab:
 		st.warning("No data found.")
 	else:
 		st.subheader(f"${investment_input:,} Invested in These Stocks is Now...")
-
+		
 		line = " | ".join(
-			f"**{ticker}:** \${investment_input * (1 + (fin_returns_df.loc[fin_returns_df['ticker']==ticker]['final_return'].values[0]/100)):,.2f}"
-			for ticker in tickers_input
+			f"**{ticker}:** \${investment_input * (1 + (fin_returns_df.loc[fin_returns_df['ticker']==ticker]['final_return'].values[0])):,.2f}"
+			for ticker in base_comp
 		)
 		st.markdown(line)
 
@@ -237,7 +242,7 @@ with compare_tab:
 		fin_color = "#ff4b4b" if fin_rel_return < 0 else "#1ed760"
 
 		hover_text = [
-			f"<b>{ticker}</b><br>Date: {d:%Y-%m-%d}<br>Return: {r:.2f}%"
+			f"<b>{ticker}</b><br>Date: {d:%Y-%m-%d}<br>Return: {r:.2f}"
 			for d, r in zip(rel_df['date'], rel_df['pct_diff'])
 		]
 		

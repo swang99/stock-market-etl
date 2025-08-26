@@ -1,14 +1,26 @@
 import io
+import os
+from dotenv import load_dotenv
+from datetime import date
 import boto3
 import sys
 import logging
 import polars as pl
+from sqlalchemy import create_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # -----------------
 # CONFIG
 # -----------------
 from config import TICKERS, ROLLING_WINDOW
+
+load_dotenv()
+DB_USER = os.getenv("POSTGRES_USER")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+DB_HOST = os.getenv("POSTGRES_HOST")
+DB_PORT = os.getenv("POSTGRES_PORT")
+DB_NAME = os.getenv("POSTGRES_DB")
+
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
@@ -24,7 +36,14 @@ logging.basicConfig(
 # -----------------
 # FUNCTIONS
 # -----------------
-def get_years(bucket_name, prefix) -> list[int]:
+def get_latest_ingest_year(engine):
+	"""Get the most recent date available for this ticker in Postgres."""
+	query = "SELECT EXTRACT(YEAR FROM MAX(date))::int AS latest_year FROM stock_metrics"
+	with engine.connect() as conn:
+		res = conn.execute(query).fetchone()[0]
+		return res
+
+"""def get_years(bucket_name, prefix) -> list[int]:
 	response = s3_client.list_objects_v2(
 		Bucket=bucket_name, 
 		Prefix=prefix,
@@ -39,7 +58,7 @@ def get_years(bucket_name, prefix) -> list[int]:
 		if len(parts) > 1 and parts[1].isdigit():
 			years.add(int(parts[1]))
 	
-	return sorted(list(years))
+	return sorted(list(years))"""
 
 
 def load_raw_df(year: str, ticker: str) -> pl.DataFrame:
@@ -64,7 +83,7 @@ def compute_metrics(df: pl.DataFrame) -> pl.DataFrame:
 		df.lazy()
 		.sort(["ticker", "date"]) 
 		.with_columns([
-			(100 * pl.col("close").pct_change().over("ticker")).alias("daily_return"),
+			(pl.col("close").pct_change().over("ticker")).alias("daily_return"),
 		])
 		.with_columns([
 			pl.col("daily_return")
@@ -77,7 +96,6 @@ def compute_metrics(df: pl.DataFrame) -> pl.DataFrame:
 	return q.collect()
 
 def data_quality_checks(df: pl.DataFrame) -> bool:
-	# print("data quality check: ", df.dtypes)
 	expected_schema = {
 		"date": pl.Datetime, "close": pl.Float64, "high": pl.Float64,
 		"low": pl.Float64, "open": pl.Float64, "volume": pl.Int64,
@@ -109,7 +127,6 @@ def data_quality_checks(df: pl.DataFrame) -> bool:
 	
 	return True
 
-
 def save_enriched_data(df: pl.DataFrame, year: str, ticker: str):
 	if df.is_empty():
 		logging.warning(f"No data to save for {year}")
@@ -136,9 +153,11 @@ def process_ticker(year: int, ticker: str):
 		logging.warning(f"Data quality failed for {year}/{ticker}")
 
 def main():
-	years = get_years("stock-market-etl", "raw/")
-	
-	for year in years:
+	postgres_url=f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+	engine = create_engine(postgres_url)
+	latest_ingest_year = get_latest_ingest_year(engine)
+
+	for year in range(latest_ingest_year, date.today().year + 1):
 		logging.info(f"Processing year {year}")
 		with ThreadPoolExecutor(max_workers=10) as executor:
 			futures = [executor.submit(process_ticker, year, ticker) for ticker in TICKERS]

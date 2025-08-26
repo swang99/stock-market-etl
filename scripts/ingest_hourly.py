@@ -44,25 +44,6 @@ logging.basicConfig(
 # -----------------
 # FUNCTIONS
 # -----------------
-"""def get_latest_ingest_date() -> Optional[datetime]:
-	bucket_name = "stock-market-etl"
-	prefix = "raw/"
-	response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-
-	# find latest date from all parquets in s3
-	latest_date = None
-	parquet_keys = [obj['Key'] for obj in response.get('Contents', []) if obj['Key'].endswith('.parquet')]
-	for key in parquet_keys:
-		obj = s3_client.get_object(Bucket=bucket_name, Key=key)
-		buffer = io.BytesIO(obj['Body'].read())
-		df = pl.read_parquet(buffer)
-
-		latest_cand  = df.select(pl.col("date").max()).to_numpy()[0][0]
-		if not latest_date or latest_cand > latest_date:
-			latest_date = latest_cand
-
-	latest_date = pd.to_datetime(latest_date).to_pydatetime()
-	return latest_date"""
 
 def get_latest_ingest_date(engine) -> Optional[datetime]:
 	"""Get the most recent date available for this ticker in Postgres."""

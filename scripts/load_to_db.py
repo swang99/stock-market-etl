@@ -3,11 +3,12 @@ import io
 import sys
 import boto3
 from dotenv import load_dotenv
+from datetime import date
 import polars as pl
 import logging
 from sqlalchemy import create_engine
 from datetime import datetime
-from transform import get_years
+from transform import get_latest_ingest_year
 
 # -----------------
 # CONFIG
@@ -111,7 +112,8 @@ def main():
 	engine = create_engine(postgres_url)
 	
 	an_start_yr = datetime.strptime(AN_START_DATE, "%Y-%m-%d").year
-	years = [yr for yr in get_years("stock-market-etl", "enriched/") if yr >= an_start_yr]
+	latest_ingest_yr = get_latest_ingest_year(engine)
+	years = [yr for yr in range(an_start_yr, latest_ingest_yr + 1)]
 	
 	logging.info(f"Start load to Postgres - found enriched data for years: {years}")
 	
@@ -119,6 +121,7 @@ def main():
 	for year in sorted(years):
 		for ticker in TICKERS:
 			load_to_stock_metrics(STOCK_TABLE, year, ticker, latest_dates, engine)
+		logging.info(f"Data loaded into postgres for {year}")
 	
 	load_to_sp500_companies("sp500_companies", engine)
 
