@@ -5,7 +5,7 @@ import sys
 import logging
 import polars as pl
 import pandas as pd
-from datetime import datetime, timezone
+import urllib
 
 # -----------------
 # CONFIG
@@ -29,7 +29,8 @@ logging.basicConfig(
 def save_sp_500():
 	# scrape table
 	url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-	tables = pd.read_html(url)
+	req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+	tables = pd.read_html(urllib.request.urlopen(req), flavor="bs4")
 	sp500_df = tables[0]
 	sp500_df["Symbol"] = sp500_df["Symbol"].str.replace(".", "-", regex=False)
 	sp500_df = sp500_df.drop(columns=["Date added", "CIK", "Founded"])

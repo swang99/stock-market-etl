@@ -1,14 +1,23 @@
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 import pandas as pd
 import urllib.request
 
 def get_sp500_tickers():
-	url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-	req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-	tables = pd.read_html(urllib.request.urlopen(req), flavor="bs4")
-	sp500_tickers = tables[0]["Symbol"].str.replace(".", "-", regex=False).tolist()
-	return sp500_tickers
+	csv_path = os.path.join("data", "sp500_companies.csv")
+
+	# use the cached CSV for Streamlit Cloud
+	if os.path.exists(csv_path):
+		sp500_df = pd.read_csv(csv_path)
+		return sp500_df["ticker_symbol"].tolist()
+	else:
+		# fallback: scrape live (local dev)
+		url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+		req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+		tables = pd.read_html(urllib.request.urlopen(req), flavor="bs4")
+		sp500_tickers = tables[0]["Symbol"].str.replace(".", "-", regex=False).tolist()
+		return sp500_tickers
 
 TICKERS = get_sp500_tickers()
 BACKFILL_START_DATE = "2005-01-01"
