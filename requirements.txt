@@ -10,3 +10,4 @@ streamlit==1.48.0
 lxml
 psycopg2-binary
 numpy
+html5lib
