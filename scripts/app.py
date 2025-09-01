@@ -2,7 +2,6 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from datetime import datetime, timedelta
@@ -47,7 +46,7 @@ def load_historical_data(tickers, start_date, end_date):
 def compute_trends(df, init_investment):
 	df = df.copy()
 	df["daily_return"] = df["daily_return"].fillna(0)
-	df["daily_return"] = 1 + (df["daily_return"] / 100)
+	df["daily_return"] = 1 + df["daily_return"]
 	df["cumulative_return"] = df.groupby("ticker")["daily_return"].cumprod()
 	df["abs_return"] = init_investment * df["cumulative_return"]
 	return df
@@ -281,5 +280,3 @@ with compare_tab:
 		)
 
 		st.plotly_chart(fig, key=f"{ticker}_vs_{comp_ticker}")
-
-	

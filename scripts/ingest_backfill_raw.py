@@ -9,7 +9,6 @@ import sys
 import logging
 import yfinance as yf
 import polars as pl
-import pandas as pd
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

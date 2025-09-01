@@ -43,24 +43,6 @@ def get_latest_ingest_year(engine):
 		res = conn.execute(query).fetchone()[0]
 		return res
 
-"""def get_years(bucket_name, prefix) -> list[int]:
-	response = s3_client.list_objects_v2(
-		Bucket=bucket_name, 
-		Prefix=prefix,
-		Delimiter="/"
-	)
-
-	# Extract years from keys
-	years = set()
-	for prefix_obj in response.get("CommonPrefixes", []):
-		folder = prefix_obj.get("Prefix", "")  # e.g. raw/2024/
-		parts = folder.strip("/").split("/")
-		if len(parts) > 1 and parts[1].isdigit():
-			years.add(int(parts[1]))
-	
-	return sorted(list(years))"""
-
-
 def load_raw_df(year: str, ticker: str) -> pl.DataFrame:
 	"""Load raw parquet files from s3"""
 	bucket_name = "stock-market-etl"

@@ -12,10 +12,10 @@ import sys
 import logging
 import yfinance as yf
 import polars as pl
-from sqlalchemy import create_engine
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from sqlalchemy import create_engine
 
 # -----------------
 # CONFIG
@@ -53,7 +53,7 @@ def get_latest_ingest_timestamp(engine) -> Optional[datetime]:
 		return res
 
 def fetch_incremental_data(tickers: list[str], start: datetime, end: datetime) -> pl.DataFrame:
-	logging.info(f"Fetching {tickers} data from {start.date()} to {end.date()} ")
+	logging.info(f"Fetching ticker data from {start.date()} to {end.date()} ")
 
 	df_pd = yf.download(tickers, start=start, end=end, auto_adjust=True)
 	if df_pd.empty:
@@ -65,10 +65,7 @@ def fetch_incremental_data(tickers: list[str], start: datetime, end: datetime) -
 
 	# convert to polars df
 	df = pl.from_pandas(df_pd)
-	df = df.with_columns(
-		ingest_ts=pl.lit(datetime.now(timezone.utc))
-	)
-
+	df = df.with_columns(ingest_ts=pl.lit(datetime.now(timezone.utc)))
 	return df
 
 def download_from_s3(bucket_name: str, key: str) -> tuple[str, pl.DataFrame]:
@@ -122,9 +119,11 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 		for ticker in tickers:
 			key = f"raw/{year}/{ticker}_metrics.parquet"
 			
-			subset_df = df.filter(
+			subset_df = df.with_columns(pl.col("volume").cast(pl.Int64)).filter(
 				(pl.col("date").dt.year() == year) & (pl.col("ticker") == ticker)
 			)
+
+			if subset_df.is_empty(): continue 
 
 			today = subset_df.select(pl.col("date")).unique().to_series()[0]
 			existing_df = existing_data[key].filter(pl.col("date") != today)
@@ -140,13 +139,13 @@ def save_partitioned_parquet(df: pl.DataFrame, tickers: list[str]):
 	logging.info("All partitions uploaded successfully.")
 	
 def main():
-	now = datetime.now()
-	start_ts = now.replace(hour=0, minute=0, second=0, microsecond=0)
-	end_ts = now
-	df_new = fetch_incremental_data(TICKERS, start_ts, end_ts)
-	# print(df_new.head())
-	save_partitioned_parquet(df_new, TICKERS)
+	postgres_url=f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+	engine = create_engine(postgres_url)
 
+	now = datetime.now()
+	start_ts, end_ts = get_latest_ingest_timestamp(engine), now
+	df_new = fetch_incremental_data(TICKERS, start_ts, end_ts)
+	save_partitioned_parquet(df_new, TICKERS)
 	logging.info("Daily incremental ingestion complete.")
 
 if __name__ == "__main__":
