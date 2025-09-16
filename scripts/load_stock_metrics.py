@@ -82,13 +82,14 @@ def load_to_stock_metrics(table_name: str, years: list[str], tickers: list[str],
 			df = df.select([col for col in df.columns if col not in ["latest_date", "adj close"]])
 			if not df.is_empty():
 				dataframes.append(df)
-		
-		logging.info(f"{year}: Loaded {len(merged_df)} new rows into {table_name}.")
 	
 	if dataframes:
 		merged_df = pl.concat(dataframes, how="vertical")
+		merged_df = merged_df.unique(subset=["ticker", "date"])
 		merged_df.write_database(table_name, engine, if_table_exists='append')
 		logging.info(f"Loaded {len(merged_df)} new rows into {table_name}.")
+	else:
+		logging.info(f"No new stock metrics to load for this run.")
 
 def main():
 	postgres_url=f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"

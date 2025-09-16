@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import requests 
 from bs4 import BeautifulSoup
+import pytz
 
 def get_sp500_tickers():
 	url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -41,3 +42,5 @@ ROLLING_WINDOW = 30  # days for volatility
 DAGS_DIR = Path(__file__).parent
 PROJECT_ROOT = DAGS_DIR.parent
 STOCK_TABLE = "stock_metrics"
+
+TIME_ZONE = pytz.timezone("US/Eastern")

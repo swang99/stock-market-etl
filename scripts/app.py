@@ -10,7 +10,7 @@ import os
 # -----------------
 # CONFIG
 # -----------------
-from config import STOCK_TABLE
+from config import STOCK_TABLE, TIME_ZONE
 
 load_dotenv()
 
@@ -32,7 +32,7 @@ engine = get_engine()
 def load_historical_data(tickers, start_date, end_date):
 	placeholders = ', '.join(['%s'] * len(tickers))
 	query = f"""
-		SELECT date, ticker, close, daily_return
+		SELECT date, ticker, close, daily_return, ingest_ts
 		FROM {STOCK_TABLE}
 		WHERE ticker IN ({placeholders})
 		  AND date BETWEEN %s AND %s
@@ -54,8 +54,14 @@ def compute_trends(df, init_investment):
 def compute_final_returns(df):
 	final_df = (
 		df.groupby("ticker", as_index=False)
-		  .agg({'cumulative_return': 'last'})
-		  .rename(columns={'cumulative_return': 'final_return'})
+		  .agg({
+			  'cumulative_return': 'last',
+			  'ingest_ts': 'max'
+			})
+		  .rename(columns={
+              'cumulative_return': 'final_return',
+              'ingest_ts': 'last_ingested'
+          })
 	)
 	return final_df
 
@@ -203,8 +209,9 @@ with compare_tab:
 		)
 		st.markdown(line)
 
-		# last_updated = fin_returns_df['last_ingested'].iloc[0]
-		# st.caption(f"Last updated: {last_updated:%Y-%m-%d %I:%M %p}")
+		last_updated = fin_returns_df['last_ingested'].iloc[0]
+		last_updated_loc = last_updated.tz_convert(TIME_ZONE)
+		st.caption(f"Last updated: {last_updated_loc:%Y-%m-%d %I:%M %p}")
 
 		chart_1 = px.line(
 			trends_df, x='date', y='abs_return', color='ticker',
